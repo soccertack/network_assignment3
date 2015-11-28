@@ -1,6 +1,8 @@
 #!/usr/local/bin/python
 import sys
 import socket
+import select
+import struct 
 
 class node:
 	def __init__(self, IP, port, dist):
@@ -10,6 +12,16 @@ class node:
 
 HOST = 'localhost'
 neighbors = []
+# recv_port_number(H, 2B). command(s). IP(s). Port(H). dist(f)
+update_struct = struct.Struct('H 10s 15s H f')
+
+def make_update_pkt(recv_port, cmd, IP, remote_port, dist):
+	values = (recv_port, cmd, IP, remote_port, dist)
+	print "make_update_pkt ", IP
+	tmp = update_struct.pack(*values)
+	print update_struct.unpack(tmp)
+	return update_struct.pack(*values)
+
 def handle_input(argv):
 	argc = len(argv)
 	if argc % 3 != 2:
@@ -45,15 +57,30 @@ def main():
 
 	# Send my information to other nodes
 	for neighbor in neighbors:
-		send_socket.sendto("test", (neighbor.IP, neighbor.port));
-		print 'send to ', neighbor.IP, neighbor.port, neighbor.dist
-	
+		# this should be the another loop to send all neighbor data to all neighbors
+		pkt = make_update_pkt(myport, "UPDATE", neighbor.IP, neighbor.port, neighbor.dist)
+		send_socket.sendto(pkt, (neighbor.IP, neighbor.port));
+
+	socket_list = [sys.stdin, recv_socket]
 	while 1:
-		d = recv_socket.recvfrom(1024)
-		data = d[0]
-		addr = d[1]
-		print data
-		print addr
+		read_sockets, write_sockets, error_sockets = select.select(socket_list , [], [])
+		for sock in read_sockets:
+			#incoming message from remote server
+			if sock == recv_socket:
+				print "recv?"
+				d = recv_socket.recvfrom(1024)
+				(recv_port, cmd, IP, remote_port, dist) = update_struct.unpack(d[0])
+				print recv_port ,cmd, IP, remote_port, dist
+				x = node(IP, recv_port, dist)
+				neighbors.append(x)	
+				
+			#user entered a message
+			else :
+				msg = raw_input()
+				for neighbor in neighbors:
+					#send_socket.sendto("bcast", (neighbor.IP, neighbor.port));
+					print 'send to ', neighbor.IP, neighbor.port, neighbor.dist
+
 
 if __name__ == '__main__':
 	main()
