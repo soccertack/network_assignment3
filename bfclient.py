@@ -20,8 +20,6 @@ dv = defaultdict(dict)
 def make_update_pkt(recv_port, cmd, IP, remote_port, dist):
 	values = (recv_port, cmd, IP, remote_port, dist)
 	print "make_update_pkt ", IP
-	tmp = update_struct.pack(*values)
-	print update_struct.unpack(tmp)
 	return update_struct.pack(*values)
 
 def handle_input(argv):
@@ -29,16 +27,19 @@ def handle_input(argv):
 	if argc % 3 != 2:
 		print 'Usage:'
 		sys.exit()
+	myport = int(argv[1])
 	arg_idx = 2 # process from the second argument
 	while arg_idx < argc:
 		IP = argv[arg_idx]
-		port = argv[arg_idx+1]
+		port = int(argv[arg_idx+1])
 		dist = float(argv[arg_idx+2])
+
 		x = node(argv[arg_idx], int(argv[arg_idx+1]), float(argv[arg_idx+2]))
 		neighbors.append(x)	
-		dv[('localhost', argv[1])][(IP, port)] = dist
+
+		dv[('localhost', myport)][(IP, port)] = dist
 		arg_idx += 3
-	return int(argv[1])
+	return myport
 
 def init_socket(myport):
 	try :
@@ -56,15 +57,24 @@ def init_socket(myport):
 		sys.exit()
 	return s
 
+def make_mydv(myport):
+	pkt =''
+	for node in dv[('localhost', myport)]:
+		IP = node[0]
+		port = node[1]
+		dist = dv[('localhost', myport)][node]
+		tmp_pkt = make_update_pkt(myport, "UPDATE", IP, port, dist)
+		pkt += tmp_pkt
+	return pkt
+
 def main():
 	myport = handle_input(sys.argv)
 	recv_socket = init_socket(myport)
 	send_socket = init_socket(0)
 
+	pkt = make_mydv(myport)
 	# Send my information to other nodes
 	for neighbor in neighbors:
-		# this should be the another loop to send all neighbor data to all neighbors
-		pkt = make_update_pkt(myport, "UPDATE", neighbor.IP, neighbor.port, neighbor.dist)
 		send_socket.sendto(pkt, (neighbor.IP, neighbor.port));
 
 	socket_list = [sys.stdin, recv_socket]
@@ -73,22 +83,32 @@ def main():
 		for sock in read_sockets:
 			#incoming message from remote server
 			if sock == recv_socket:
-				print "recv?"
 				d = recv_socket.recvfrom(1024)
-				(recv_port, cmd, IP, remote_port, dist) = update_struct.unpack(d[0])
-				print recv_port ,cmd, IP, remote_port, dist
-				IP = IP.rstrip('\0')
-				x = node(IP, recv_port, dist)
-				neighbors.append(x)	
-				dv[('localhost',myport)][(IP, recv_port)] = dist
-				
+				print "len is ", len(d[0])
+				idx = 0
+
+				while idx < len(d[0]):
+					data = d[0][idx:idx+36]
+					idx += 36
+					(recv_port, cmd, IP, remote_port, dist) = update_struct.unpack(data)
+					print recv_port ,cmd, IP, remote_port, dist
+					IP = IP.rstrip('\0')
+					x = node(IP, recv_port, dist)
+					neighbors.append(x)	
+					dv[('localhost',myport)][(IP, recv_port)] = dist
+
+				'''
+				update_dv()	
+				need_notify = calc_dv()
+				if need_notify:
+					send_dv()
+				'''
 			#user entered a message
 			else :
-				print "My table"
-				print dv
+				pkt = make_mydv(myport)
 				msg = raw_input()
 				for neighbor in neighbors:
-					#send_socket.sendto("bcast", (neighbor.IP, neighbor.port));
+					send_socket.sendto(pkt, (neighbor.IP, neighbor.port));
 					print 'send to ', neighbor.IP, neighbor.port, neighbor.dist
 
 
