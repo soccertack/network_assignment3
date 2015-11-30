@@ -10,8 +10,9 @@ class node:
 		self.IP = IP
 		self.port = port
 
-HOST = ''
 neighbors = []
+my_port = 0
+my_IP = ''
 
 header_struct = struct.Struct('H')
 # recv_port_number(H, 2B). command(s). IP(s). Port(H). dist(f)
@@ -35,6 +36,14 @@ def add_neighbor(IP, port):
 		print 'add ', IP, port
 		neighbors.append((IP, port))	
 
+def showrt():
+	print dv
+	for node in dv[(my_IP, my_port)]:
+		IP = node[0]
+		port = node[1]
+		dist = dv[(my_IP, my_port)][node]
+		print 'Destination = ', IP, ', Cost = ', dist, ', Link = (', IP, ':', port, ')'
+
 def handle_input(argv):
 	argc = len(argv)
 	if argc % 3 != 2:
@@ -49,64 +58,69 @@ def handle_input(argv):
 
 		add_neighbor(IP, port)
 
-		dv[('localhost', myport)][(IP, port)] = dist
+		dv[(my_IP, myport)][(IP, port)] = dist
 		arg_idx += 3
+	print 'input'
+	print dv
 	return myport
 
-def init_socket(myport):
+def init_socket(for_send):
 	try :
 		s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	except socket.error, msg :
 		print 'Socket creation Fail. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
 		sys.exit()
-	if myport == 0:
+	if for_send:
 		return s
 
 	try:
-		s.bind((HOST, myport))
+		s.bind(('', my_port))
 	except socket.error , msg:
 		print 'Bind Fail. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
 		sys.exit()
 	return s
 
-def make_mydv(myport):
-#	values = (myport)
-#	header = header_struct.pack(*values)
+def make_update_pkts():
 	header = ''
 	pkt =''
-	for node in dv[('localhost', myport)]:
+	for node in dv[(my_IP, my_port)]:
 		IP = node[0]
 		port = node[1]
-		dist = dv[('localhost', myport)][node]
-		tmp_pkt = make_update_pkt(myport, "UPDATE", IP, port, dist)
+		dist = dv[(my_IP, my_port)][node]
+		tmp_pkt = make_update_pkt(my_port, "UPDATE", IP, port, dist)
 		pkt += tmp_pkt
 	return header+pkt
 
 # Send my information to other nodes
-def route_update(myport, send_socket):
-	pkt = make_mydv(myport)
+def route_update(send_socket):
+	pkt = make_update_pkts()
 	for IP, port in neighbors:
 		send_socket.sendto(pkt, (IP, port));
 
-def handle_pkt(myport, d, sender_IP):
+def handle_pkt(d, src_IP):
 	idx = 0
 	data_len = len(d)
 
 	while idx < data_len:
 		data = d[idx:idx+36]
 		idx += 36
-		(recv_port, cmd, IP, remote_port, dist) = update_struct.unpack(data)
-		print recv_port ,cmd, IP, remote_port, dist
-		IP = IP.rstrip('\0')
-		dv[('localhost',myport)][(IP, recv_port)] = dist
+		(src_port, cmd, dst_IP, dst_port, dist) = update_struct.unpack(data)
+		print 'received', dst_IP, dst_port, dist
+		dst_IP = dst_IP.rstrip('\0')
+		dv[(src_IP, src_port)][(dst_IP, dst_port)] = dist
+		if (dst_IP, dst_port) not in dv[(my_IP, my_port)]:
+			print 'need to add ', dst_IP, dst_port
+			dv[(my_IP, my_port)][(dst_IP, dst_port)] = 100 #TODO calc distance
 
-	add_neighbor(sender_IP, recv_port)
+	add_neighbor(src_IP, src_port)
 
 def main():
-	myport = handle_input(sys.argv)
-	recv_socket = init_socket(myport)
-	send_socket = init_socket(0)
-	route_update(myport, send_socket)
+	global my_port, my_IP
+	my_IP = get_ip_address()
+	my_port = handle_input(sys.argv)
+	recv_socket = init_socket(0)
+	send_socket = init_socket(1)
+	route_update(send_socket)
 
 	socket_list = [sys.stdin, recv_socket]
 	while 1:
@@ -116,7 +130,7 @@ def main():
 			if sock == recv_socket:
 				d = recv_socket.recvfrom(1024)
 				sender_IP = d[1][0]
-				handle_pkt(myport, d[0], sender_IP)
+				handle_pkt(d[0], sender_IP)
 				'''
 				update_dv()	
 				need_notify = calc_dv()
@@ -126,7 +140,8 @@ def main():
 			#user entered a message
 			else :
 				msg = raw_input()
-				route_update(myport, send_socket)
+				showrt()
+				route_update(send_socket)
 
 
 if __name__ == '__main__':
