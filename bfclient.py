@@ -109,9 +109,10 @@ def handle_pkt(d, src_IP):
 		dst_IP = dst_IP.rstrip('\0')
 		dv[(src_IP, src_port)][(dst_IP, dst_port)] = dist
 		if (dst_IP, dst_port) not in dv[(my_IP, my_port)]:
-			print 'need to add ', dst_IP, dst_port
-			dv[(my_IP, my_port)][(dst_IP, dst_port)] = 100 #TODO calc distance
-
+			if dst_IP == my_IP and dst_port == my_port:
+				dv[(my_IP, my_port)][(src_IP, src_port)] = dist #TODO is this right way to initialize?
+			else:
+				dv[(my_IP, my_port)][(dst_IP, dst_port)] = 100 #TODO calc distance
 	add_neighbor(src_IP, src_port)
 
 def main():
