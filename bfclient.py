@@ -116,6 +116,33 @@ def handle_pkt(d, src_IP):
 	add_neighbor(src_IP, src_port, dv[src_node][my_node])
 	print neighbor_cost
 
+def print_dv():
+	print dv
+	print 'dv start'
+	for a in dv:
+		print dv[a]
+	print 'dv end'
+def calc_dv():
+	for target in dv[my_node]:
+		if target == my_node: # Do not calc cost to myself
+			continue
+		init_value = dv[my_node][target]
+		dv[my_node][target] = neighbor_cost.get(target, float('inf'))
+		for first_hop in neighbors:
+			if first_hop == target:
+				continue
+			cost = neighbor_cost[first_hop]
+			print_dv()
+			print 'first_hop cost', cost
+			print target 
+			cost += dv[first_hop].get (target, float('inf'))
+			print 'total cost', cost
+			if cost < dv[my_node][target]:
+				dv[my_node][target] = cost
+		if init_value != dv[my_node][target]:
+			print "should send update" 	#TODO
+
+
 def main():
 	global my_port, my_IP, my_node
 	my_IP = get_ip_address()
@@ -134,6 +161,7 @@ def main():
 				d = recv_socket.recvfrom(1024)
 				sender_IP = d[1][0]
 				handle_pkt(d[0], sender_IP)
+				calc_dv()
 				'''
 				update_dv()	
 				need_notify = calc_dv()
