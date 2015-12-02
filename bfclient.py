@@ -11,6 +11,7 @@ class node:
 		self.port = port
 
 neighbors = []
+neighbor_cost = {}
 my_port = 0
 my_IP = ''
 
@@ -30,14 +31,13 @@ def make_update_pkt(recv_port, cmd, IP, remote_port, dist):
 	values = (recv_port, cmd, IP, remote_port, dist)
 	return update_struct.pack(*values)
 
-def add_neighbor(IP, port):
-	x = node(IP, port)
+def add_neighbor(IP, port, dist):
 	if (IP, port) not in neighbors:
 		print 'add ', IP, port
 		neighbors.append((IP, port))	
+	neighbor_cost[(IP, port)] = dist
 
 def showrt():
-	print dv
 	for node in dv[(my_IP, my_port)]:
 		IP = node[0]
 		port = node[1]
@@ -51,12 +51,13 @@ def handle_input(argv):
 		sys.exit()
 	myport = int(argv[1])
 	arg_idx = 2 # process from the second argument
+	dv[(my_IP, myport)][(my_IP, myport)] = 0
 	while arg_idx < argc:
 		IP = argv[arg_idx]
 		port = int(argv[arg_idx+1])
 		dist = float(argv[arg_idx+2])
 
-		add_neighbor(IP, port)
+		add_neighbor(IP, port, dist)
 
 		dv[(my_IP, myport)][(IP, port)] = dist
 		arg_idx += 3
@@ -105,20 +106,21 @@ def handle_pkt(d, src_IP):
 		data = d[idx:idx+36]
 		idx += 36
 		(src_port, cmd, dst_IP, dst_port, dist) = update_struct.unpack(data)
-		print 'received', dst_IP, dst_port, dist
 		dst_IP = dst_IP.rstrip('\0')
-		dv[(src_IP, src_port)][(dst_IP, dst_port)] = dist
-		if (dst_IP, dst_port) not in dv[(my_IP, my_port)]:
-			if dst_IP == my_IP and dst_port == my_port:
-				dv[(my_IP, my_port)][(src_IP, src_port)] = dist #TODO is this right way to initialize?
-			else:
-				dv[(my_IP, my_port)][(dst_IP, dst_port)] = 100 #TODO calc distance
-	add_neighbor(src_IP, src_port)
+		print 'received', dst_IP, dst_port, dist
+		src_node = (src_IP, src_port)
+		dst_node = (dst_IP, dst_port)
+		dv[src_node][dst_node] = dist
+		if dst_node not in dv[my_node]: # Add column in dv table
+			dv[my_node][dst_node] = float('inf')
+	add_neighbor(src_IP, src_port, dv[src_node][my_node])
+	print neighbor_cost
 
 def main():
-	global my_port, my_IP
+	global my_port, my_IP, my_node
 	my_IP = get_ip_address()
 	my_port = handle_input(sys.argv)
+	my_node = (my_IP, my_port)
 	recv_socket = init_socket(0)
 	send_socket = init_socket(1)
 	route_update(send_socket)
