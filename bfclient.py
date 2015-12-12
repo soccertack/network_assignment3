@@ -41,6 +41,8 @@ def showrt():
 	for node in dv[(my_IP, my_port)]:
 		IP = node[0]
 		port = node[1]
+		if IP == my_IP and port == my_port:
+			continue
 		dist = dv[(my_IP, my_port)][node]
 		print 'Destination = ', IP, ', Cost = ', dist, ', Link = (', IP, ':', port, ')'
 
@@ -123,6 +125,7 @@ def print_dv():
 		print dv[a]
 	print 'dv end'
 def calc_dv():
+	need_update = 0
 	for target in dv[my_node]:
 		if target == my_node: # Do not calc cost to myself
 			continue
@@ -141,6 +144,8 @@ def calc_dv():
 				dv[my_node][target] = cost
 		if init_value != dv[my_node][target]:
 			print "should send update" 	#TODO
+			need_update = 1
+	return need_update
 
 
 def main():
@@ -161,18 +166,14 @@ def main():
 				d = recv_socket.recvfrom(1024)
 				sender_IP = d[1][0]
 				handle_pkt(d[0], sender_IP)
-				calc_dv()
-				'''
-				update_dv()	
-				need_notify = calc_dv()
+				need_notify= calc_dv()
 				if need_notify:
-					send_dv()
-				'''
+					route_update(send_socket)
 			#user entered a message
 			else :
 				msg = raw_input()
 				showrt()
-				route_update(send_socket)
+				#route_update(send_socket)
 
 
 if __name__ == '__main__':
