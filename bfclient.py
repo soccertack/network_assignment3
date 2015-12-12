@@ -13,6 +13,7 @@ class node:
 
 neighbors = []
 neighbor_cost = {}
+neighbor_init_cost = {}
 my_port = 0
 my_IP = ''
 
@@ -42,9 +43,15 @@ def add_neighbor(IP, port, dist):
 	if (IP, port) not in neighbors:
 		logging.debug('add %s %d'% (IP, port))
 		neighbors.append((IP, port))	
+		neighbor_init_cost[(IP, port)] = dist
 	neighbor_cost[(IP, port)] = dist
 
 def showrt():
+	logging.debug("neighbor cost original")
+	for key in neighbor_init_cost:
+		print key, neighbor_init_cost[key]
+
+
 	for node in dv[(my_IP, my_port)]:
 		IP = node[0]
 		port = node[1]
@@ -164,6 +171,21 @@ def calc_dv():
 			need_update = 1
 	return need_update
 
+def linkup(IP, port):
+
+	if (IP, port) not in neighbors:
+		print IP, port, 'is not my neighbor'
+		logging.debug(neighbors)
+		return
+
+	need_notify = 0
+	if neighbor_cost[(IP, port)] != neighbor_init_cost[(IP, port)]:
+		neighbor_cost[(IP, port)] = neighbor_init_cost[(IP, port)]
+		need_notify = 1
+	need_notify |= calc_dv()
+	if need_notify:
+		route_update(send_socket)
+	
 def linkdown(IP, port):
 
 	if (IP, port) not in neighbors:
@@ -178,7 +200,6 @@ def linkdown(IP, port):
 	need_notify |= calc_dv()
 	if need_notify:
 		route_update(send_socket)
-		
 
 def parse_cmd(msg):
 	if msg == "":
@@ -192,6 +213,11 @@ def parse_cmd(msg):
 	elif sp[0] == "LINKDOWN" or sp[0] == 'd':
 		if len(sp) == 3:
 			linkdown(sp[1], int(sp[2]))
+			return
+
+	elif sp[0] == "LINKUP" or sp[0] == 'u':
+		if len(sp) == 3:
+			linkup(sp[1], int(sp[2]))
 			return
 	print 'invalid command: ', msg
 
