@@ -3,6 +3,7 @@ import sys
 import socket
 import select
 import struct 
+import logging
 from collections import defaultdict
 
 class node:
@@ -15,7 +16,8 @@ neighbor_cost = {}
 my_port = 0
 my_IP = ''
 
-header_struct = struct.Struct('H')
+
+header_struct = struct.Struct('15s H f')
 # recv_port_number(H, 2B). command(s). IP(s). Port(H). dist(f)
 update_struct = struct.Struct('H 10s 15s H f')
 dv = defaultdict(dict)
@@ -27,13 +29,18 @@ def get_ip_address():
 	s.connect(("8.8.8.8", 80))
 	return s.getsockname()[0]  
 
+def make_header(IP, port, dist):
+	values = (IP, port, dist)
+	return header_struct.pack(*values)
+
+
 def make_update_pkt(recv_port, cmd, IP, remote_port, dist):
 	values = (recv_port, cmd, IP, remote_port, dist)
 	return update_struct.pack(*values)
 
 def add_neighbor(IP, port, dist):
 	if (IP, port) not in neighbors:
-		print 'add ', IP, port
+		logging.debug('add %s %d'% (IP, port))
 		neighbors.append((IP, port))	
 	neighbor_cost[(IP, port)] = dist
 
@@ -63,8 +70,8 @@ def handle_input(argv):
 
 		dv[(my_IP, myport)][(IP, port)] = dist
 		arg_idx += 3
-	print 'input'
-	print dv
+	logging.debug('input')
+	logging.debug(dv)
 	return myport
 
 def init_socket(for_send):
@@ -84,39 +91,47 @@ def init_socket(for_send):
 	return s
 
 def make_update_pkts():
-	header = ''
 	pkt =''
 	for node in dv[(my_IP, my_port)]:
 		IP = node[0]
 		port = node[1]
 		dist = dv[(my_IP, my_port)][node]
+		logging.debug('send from %d. To %d: %f' % (my_port, port, dist))
 		tmp_pkt = make_update_pkt(my_port, "UPDATE", IP, port, dist)
 		pkt += tmp_pkt
-	return header+pkt
+	return pkt
 
 # Send my information to other nodes
 def route_update(send_socket):
-	pkt = make_update_pkts()
+	payload = make_update_pkts()
 	for IP, port in neighbors:
+		header = make_header(my_IP, my_port, neighbor_cost[(IP, port)]) 
+		pkt = header+payload
 		send_socket.sendto(pkt, (IP, port));
 
 def handle_pkt(d, src_IP):
 	idx = 0
 	data_len = len(d)
+	if data_len == 0:
+		return
+
+	idx = header_struct.size
+	header = d[0:idx]
+	(src_IP, src_port, dist) = header_struct.unpack(header)
+	src_IP = src_IP.rstrip('\0')
+	add_neighbor(src_IP, src_port, dist)
 
 	while idx < data_len:
 		data = d[idx:idx+36]
 		idx += 36
 		(src_port, cmd, dst_IP, dst_port, dist) = update_struct.unpack(data)
 		dst_IP = dst_IP.rstrip('\0')
-		print 'received', dst_IP, dst_port, dist
+		logging.debug('received from %d: To %s %d: %f '% (src_port, dst_IP, dst_port, dist))
 		src_node = (src_IP, src_port)
 		dst_node = (dst_IP, dst_port)
 		dv[src_node][dst_node] = dist
 		if dst_node not in dv[my_node]: # Add column in dv table
 			dv[my_node][dst_node] = float('inf')
-	add_neighbor(src_IP, src_port, dv[src_node][my_node])
-	print neighbor_cost
 
 def print_dv():
 	print dv
@@ -124,6 +139,7 @@ def print_dv():
 	for a in dv:
 		print dv[a]
 	print 'dv end'
+
 def calc_dv():
 	need_update = 0
 	for target in dv[my_node]:
@@ -131,25 +147,62 @@ def calc_dv():
 			continue
 		init_value = dv[my_node][target]
 		dv[my_node][target] = neighbor_cost.get(target, float('inf'))
+		#print target 
+		logging.debug('neighbor_cost: %f' % dv[my_node][target])
 		for first_hop in neighbors:
 			if first_hop == target:
 				continue
 			cost = neighbor_cost[first_hop]
-			print_dv()
-			print 'first_hop cost', cost
-			print target 
+			#print_dv()
+			logging.debug('first_hop cost %f'% cost)
 			cost += dv[first_hop].get (target, float('inf'))
-			print 'total cost', cost
+			logging.debug('total cost %f' % cost)
 			if cost < dv[my_node][target]:
 				dv[my_node][target] = cost
 		if init_value != dv[my_node][target]:
-			print "should send update" 	#TODO
+			logging.debug("init: %f changed: %f" % (init_value, dv[my_node][target]))
 			need_update = 1
 	return need_update
 
+def linkdown(IP, port):
+
+	if (IP, port) not in neighbors:
+		print IP, port, 'is not my neighbor'
+		logging.debug(neighbors)
+		return
+
+	need_notify = 0
+	if neighbor_cost[(IP, port)]  != float('inf'):
+		neighbor_cost[(IP, port)] = float('inf') 
+		need_notify = 1
+	need_notify |= calc_dv()
+	if need_notify:
+		route_update(send_socket)
+		
+
+def parse_cmd(msg):
+	if msg == "":
+		return
+
+	sp = msg.split()
+	if sp[0] == "SHOWRT" or sp[0] == "s":
+		if len(sp) == 1:
+			showrt()
+			return
+	elif sp[0] == "LINKDOWN" or sp[0] == 'd':
+		if len(sp) == 3:
+			linkdown(sp[1], int(sp[2]))
+			return
+	print 'invalid command: ', msg
+
+def execute_cmd(msg):
+	parse_cmd(msg)
+	return 0
 
 def main():
-	global my_port, my_IP, my_node
+#	logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(message)s')
+	logging.debug('This is debug %s' % "abc")
+	global my_port, my_IP, my_node, send_socket
 	my_IP = get_ip_address()
 	my_port = handle_input(sys.argv)
 	my_node = (my_IP, my_port)
@@ -172,8 +225,7 @@ def main():
 			#user entered a message
 			else :
 				msg = raw_input()
-				showrt()
-				#route_update(send_socket)
+				execute_cmd(msg)
 
 
 if __name__ == '__main__':
