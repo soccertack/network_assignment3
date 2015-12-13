@@ -57,7 +57,6 @@ def showrt():
 	for key in neighbor_init_cost:
 		print key, neighbor_init_cost[key]
 
-
 	for node in dv[(my_IP, my_port)]:
 		IP = node[0]
 		port = node[1]
@@ -65,10 +64,6 @@ def showrt():
 			continue
 		dist = dv[(my_IP, my_port)][node]
 		print 'Destination = ', IP, ', Cost = ', dist, ', Link = (', IP, ':', port, ')'
-	
-	for neighbor in dead_neighbors:
-		print '[Dead] Destination = ', neighbor[0], ', Cost = ', float('inf'), ', Link = (', neighbor[0], ':', neighbor[1], ')'
-		
 
 def handle_input(argv):
 	argc = len(argv)
@@ -258,8 +253,6 @@ def check_neighbor_timeout():
 			del neighbor_last_recv[neighbor]
 			del neighbor_cost[neighbor]
 			del neighbor_init_cost[neighbor]
-			del dv[neighbor]
-			del dv[(my_IP, my_port)][neighbor]
 
 def main():
 #	logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(message)s')
