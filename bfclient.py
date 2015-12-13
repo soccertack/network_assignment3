@@ -53,7 +53,7 @@ def add_neighbor(IP, port, dist):
 
 def showrt():
 	logging.debug("neighbor cost original")
-	print_dv()
+	#print_dv()
 	for key in neighbor_init_cost:
 		print key, neighbor_init_cost[key]
 
@@ -63,7 +63,7 @@ def showrt():
 		if IP == my_IP and port == my_port:
 			continue
 		dist = dv[(my_IP, my_port)][node]
-		print 'Destination = ', IP, ', Cost = ', dist, ', Link = (', IP, ':', port, ')'
+		print 'Destination = ', IP, ':', port, ', Cost = ', dist, ', Link = (', my_IP, ':', my_port, ')'
 
 def handle_input(argv):
 	argc = len(argv)
