@@ -66,7 +66,7 @@ def showrt():
 		if IP == my_IP and port == my_port:
 			continue
 		dist = dv[(my_IP, my_port)][node]
-		print 'Destination = ', IP, ':', port, ', Cost = ', dist, ', Link = (', my_IP, ':', my_port, ')'
+		print 'Destination = ', IP, ':', port, ', Cost = ', dist, ', Link = (', my_IP, ':', first_hop[my_node][node][1], ')'
 
 def handle_input(argv):
 	argc = len(argv)
@@ -171,6 +171,7 @@ def calc_dv():
 			continue
 		init_value = dv[my_node][target]
 		dv[my_node][target] = neighbor_cost.get(target, float('inf'))
+		first_hop[my_node][target] = target 
 		#print target 
 		logging.debug(target)
 		logging.debug('neighbor_cost: %f' % dv[my_node][target])
