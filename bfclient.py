@@ -19,7 +19,8 @@ neighbor_init_cost = {}
 neighbor_last_recv = {}
 my_port = 0
 my_IP = ''
-TIMEOUT = 1
+timeout = 1
+TICK = 1
 
 
 header_struct = struct.Struct('15s H f')
@@ -54,8 +55,10 @@ def add_neighbor(IP, port, dist):
 def showrt():
 	logging.debug("neighbor cost original")
 	#print_dv()
+	'''
 	for key in neighbor_init_cost:
 		print key, neighbor_init_cost[key]
+	'''
 
 	for node in dv[(my_IP, my_port)]:
 		IP = node[0]
@@ -67,11 +70,15 @@ def showrt():
 
 def handle_input(argv):
 	argc = len(argv)
-	if argc % 3 != 2:
-		print 'Usage:'
+	if argc % 3 != 0:
+		print 'Usage: ./bfclient.py localport timeout [ipaddress1 port1 weight1 ...]'
 		sys.exit()
-	myport = int(argv[1])
-	arg_idx = 2 # process from the second argument
+	arg_idx = 1
+	myport = int(argv[arg_idx])
+	arg_idx += 1
+	timeout = int(argv[arg_idx])
+	arg_idx += 1
+
 	dv[(my_IP, myport)][(my_IP, myport)] = 0
 	while arg_idx < argc:
 		IP = argv[arg_idx]
@@ -244,7 +251,7 @@ def execute_cmd(msg):
 
 def check_neighbor_timeout():
 	for neighbor in neighbor_last_recv:
-		if datetime.now() - neighbor_last_recv[neighbor] > timedelta(seconds=TIMEOUT*3):
+		if datetime.now() - neighbor_last_recv[neighbor] > timedelta(seconds=timeout*3):
 			dead_neighbors.append(neighbor)
 
 	for neighbor in dead_neighbors:
@@ -268,7 +275,7 @@ def main():
 
 	socket_list = [sys.stdin, recv_socket]
 	while 1:
-		read_sockets, write_sockets, error_sockets = select.select(socket_list , [], [], TIMEOUT)
+		read_sockets, write_sockets, error_sockets = select.select(socket_list , [], [], TICK)
 		if read_sockets:
 			for sock in read_sockets:
 				#incoming message from remote server
@@ -283,7 +290,7 @@ def main():
 				else :
 					msg = raw_input()
 					execute_cmd(msg)
-		if datetime.now() - last_route > timedelta(seconds=TIMEOUT):
+		if datetime.now() - last_route > timedelta(seconds=timeout):
 			route_update(send_socket)
 			last_route = datetime.now()
 		check_neighbor_timeout()
