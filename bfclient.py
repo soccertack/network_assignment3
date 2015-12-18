@@ -1,4 +1,9 @@
 #!/usr/local/bin/python
+
+# TODOs
+# distance is not changed when neighbor node is dead
+# node in command line is not dead after 3*timeout
+
 import sys
 import socket
 import select
@@ -12,11 +17,11 @@ class node:
 		self.IP = IP
 		self.port = port
 
-neighbors = []
+neighbors = []		# 
 dead_neighbors = []
 neighbor_cost = {}
-neighbor_init_cost = {}
-neighbor_last_recv = {}
+neighbor_init_cost = {}	# To restore initial link cost on LINKUP command
+neighbor_last_recv = {} # To maintain timeout for each neighbor
 my_port = 0
 my_IP = ''
 timeout = 1
@@ -66,7 +71,13 @@ def showrt():
 		if IP == my_IP and port == my_port:
 			continue
 		dist = dv[(my_IP, my_port)][node]
-		print 'Destination = ', IP, ':', port, ', Cost = ', dist, ', Link = (', my_IP, ':', first_hop[my_node][node][1], ')'
+		if node in first_hop[my_node]:
+			first_IP = first_hop[my_node][node][0]
+			first_port = first_hop[my_node][node][1]
+		else:
+			first_IP = IP 
+			first_port = port 
+		print 'Destination = ', IP, ':', port, ', Cost = ', dist, ', Link = (', first_IP, ':', first_port, ')'
 
 def handle_input(argv):
 	argc = len(argv)
@@ -88,6 +99,7 @@ def handle_input(argv):
 		add_neighbor(IP, port, dist)
 
 		dv[(my_IP, myport)][(IP, port)] = dist
+		neighbor_last_recv[(IP, port)] = datetime.now()
 		arg_idx += 3
 	logging.debug('input')
 	logging.debug(dv)
@@ -134,6 +146,7 @@ def route_update(send_socket):
 		send_socket.sendto(pkt, (IP, port));
 
 def handle_pkt(d, src_IP):
+	logging.debug('in handle_pkt')
 	idx = 0
 	data_len = len(d)
 	if data_len == 0:
@@ -244,7 +257,7 @@ def parse_cmd(msg):
 			sys.exit()
 			return
 
-	print 'invalid command: ', msg
+	print 'invalid command: ', msg, sp[0]
 
 def execute_cmd(msg):
 	parse_cmd(msg)
@@ -253,6 +266,8 @@ def execute_cmd(msg):
 def check_neighbor_timeout():
 	for neighbor in neighbor_last_recv:
 		if datetime.now() - neighbor_last_recv[neighbor] > timedelta(seconds=timeout*3):
+			logging.debug('somebody is dead')
+			logging.debug(neighbor)
 			dead_neighbors.append(neighbor)
 
 	for neighbor in dead_neighbors:
@@ -261,9 +276,10 @@ def check_neighbor_timeout():
 			del neighbor_last_recv[neighbor]
 			del neighbor_cost[neighbor]
 			del neighbor_init_cost[neighbor]
+			del dv[my_node][neighbor]
 
 def main():
-#	logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(message)s')
+	logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(message)s')
 	logging.debug('This is debug %s' % "abc")
 	global my_port, my_IP, my_node, send_socket
 	my_IP = get_ip_address()
