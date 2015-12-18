@@ -1,9 +1,5 @@
 #!/usr/local/bin/python
 
-# TODOs
-# distance is not changed when neighbor node is dead
-# node in command line is not dead after 3*timeout
-
 import sys
 import socket
 import select
@@ -17,16 +13,14 @@ class node:
 		self.IP = IP
 		self.port = port
 
-neighbors = []		# 
-dead_neighbors = []
-neighbor_cost = {}
+neighbors = []		
+neighbor_cost = {} 	# current cost to neighbor
 neighbor_init_cost = {}	# To restore initial link cost on LINKUP command
 neighbor_last_recv = {} # To maintain timeout for each neighbor
 my_port = 0
 my_IP = ''
 timeout = 1
 TICK = 1
-
 
 header_struct = struct.Struct('15s H f')
 # recv_port_number(H, 2B). command(s). IP(s). Port(H). dist(f)
@@ -35,7 +29,6 @@ dv = defaultdict(dict)
 first_hop = defaultdict(dict)
 
 #http://stackoverflow.com/questions/24196932/how-can-i-get-the-ip-address-of-eth0-in-python
-
 def get_ip_address():
 	s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 	s.connect(("8.8.8.8", 80))
@@ -44,7 +37,6 @@ def get_ip_address():
 def make_header(IP, port, dist):
 	values = (IP, port, dist)
 	return header_struct.pack(*values)
-
 
 def make_update_pkt(recv_port, cmd, IP, remote_port, dist):
 	values = (recv_port, cmd, IP, remote_port, dist)
@@ -184,10 +176,13 @@ def calc_dv():
 			continue
 		init_value = dv[my_node][target]
 		dv[my_node][target] = neighbor_cost.get(target, float('inf'))
-		first_hop[my_node][target] = target 
+		
+		if my_node in first_hop:
+			if target in first_hop[my_node]:
+				del first_hop[my_node][target]
 		#print target 
 		logging.debug(target)
-		logging.debug('neighbor_cost: %f' % dv[my_node][target])
+		logging.debug('init_value: %f, neighbor_cost: %f' % (init_value, dv[my_node][target]))
 		for neighbor in neighbors:
 			if neighbor == target:
 				continue
@@ -258,28 +253,29 @@ def parse_cmd(msg):
 			return
 
 	print 'invalid command: ', msg, sp[0]
+	logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(message)s')
 
 def execute_cmd(msg):
 	parse_cmd(msg)
 	return 0
 
 def check_neighbor_timeout():
-	for neighbor in neighbor_last_recv:
+	dead_neighbors = []
+	for neighbor in neighbors:
 		if datetime.now() - neighbor_last_recv[neighbor] > timedelta(seconds=timeout*3):
 			logging.debug('somebody is dead')
 			logging.debug(neighbor)
 			dead_neighbors.append(neighbor)
 
 	for neighbor in dead_neighbors:
-		if neighbor in neighbor_last_recv:
-			neighbors.remove(neighbor)
-			del neighbor_last_recv[neighbor]
-			del neighbor_cost[neighbor]
-			del neighbor_init_cost[neighbor]
-			del dv[my_node][neighbor]
+		neighbors.remove(neighbor)
+		del neighbor_last_recv[neighbor]
+		del neighbor_cost[neighbor]
+		del neighbor_init_cost[neighbor]
+		del dv[my_node][neighbor]
 
 def main():
-	logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(message)s')
+#	logging.basicConfig(level=logging.DEBUG, format='%(levelname)s:%(message)s')
 	logging.debug('This is debug %s' % "abc")
 	global my_port, my_IP, my_node, send_socket
 	my_IP = get_ip_address()
