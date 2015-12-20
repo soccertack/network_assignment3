@@ -1,4 +1,4 @@
-#!/usr/local/bin/python
+#!/usr/bin/python
 
 import sys
 import socket
@@ -74,7 +74,7 @@ def showrt():
 def handle_input(argv):
 	argc = len(argv)
 	if argc % 3 != 0:
-		print 'Usage: ./bfclient.py localport timeout [ipaddress1 port1 weight1 ...]'
+		print 'Usage: python bfclient.py localport timeout [ipaddress1 port1 weight1 ...]'
 		sys.exit()
 	arg_idx = 1
 	myport = int(argv[arg_idx])
